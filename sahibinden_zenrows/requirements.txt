@@ -1,0 +1,8 @@
+zenrows
+beautifulsoup4
+pandas
+requests
+slack-sdk
+slack
+openpyxl
+multiprocessing

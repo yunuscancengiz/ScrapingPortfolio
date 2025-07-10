@@ -1,0 +1,6 @@
+https://www.sahibinden.com/satilik/sahibinden?sorting=date_desc
+https://www.sahibinden.com/satilik/emlak-ofisinden?sorting=date_desc
+https://www.sahibinden.com/kiralik/sahibinden?sorting=date_desc
+https://www.sahibinden.com/kiralik/emlak-ofisinden?sorting=date_desc
+https://www.sahibinden.com/satilik-arsa/sahibinden?sorting=date_desc
+https://www.sahibinden.com/satilik-arsa/emlak-ofisinden?sorting=date_desc
