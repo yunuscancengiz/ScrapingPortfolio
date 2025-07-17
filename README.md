@@ -1,4 +1,4 @@
-# Web Scraping Portfolio – PourNow
+# Web Scraping Portfolio
 
 Welcome to my Web Scraping portfolio!
 
@@ -7,7 +7,7 @@ This repository showcases several web scraping bots that I have developed over t
 - **E-commerce product data extraction**
 - **Dynamic content scraping (JavaScript-heavy websites)**
 - **Data cleaning and transformation**
-- **Efficient handling of anti-bot measures (with ZenRow)s**
+- **Efficient handling of anti-bot measures (with ZenRows)**
 - **Parallel and asynchronous scraping for performance optimization**
 
 ## Tech Stack & Tools
