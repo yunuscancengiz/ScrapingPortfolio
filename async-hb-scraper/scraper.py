@@ -1,52 +1,70 @@
+import asyncio
+import aiohttp
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
-import pandas as pd
+from urllib.parse import quote
 import json
 import traceback
+import random
+import pandas as pd
 
 
-class HepsiburadaScraper:
+class AsyncHepsiburadaScraper:
+    headers = {
+        "accept": "application/json, text/plain, */*",
+        "accept-encoding": "gzip, deflate, br, zstd",
+        "accept-language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "cache-control": "no-cache",
+        "hb-source-app": "hepsi-ads-spon-brands",
+        "origin": "https://www.hepsiburada.com",
+        "referer": "",
+        "sec-ch-ua": '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-site",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+    }
 
     def __init__(self, url: str, first_page: int, final_page: int, filename: str):
+        self.headers['referer'] = quote(url)
         self.url = url
         self.first_page = first_page
         self.final_page = final_page
         self.filename = filename
         self.list_for_excel = []
 
-        self.browser = None
-        self.page = None
 
-
-
-    def main(self):
-        try:
+    async def main(self):
+        async with aiohttp.ClientSession() as session:
             page_urls = self.generate_page_urls(first_page=self.first_page, final_page=self.final_page)
-            with sync_playwright() as p:
-                self.browser = p.chromium.launch(headless=False)
-                self.page = self.browser.new_page()
-            
-                for page_url in page_urls:
-                    product_urls = self.scrape_product_urls(page_url=page_url)
-                    for product_url in product_urls:
-                        self.scrape_product_info(product_url=product_url)
-                self.browser.close()
-        except Exception as exc:
-            print(exc)
-            print(traceback.format_exc())
-        finally:
-            self.convert_to_excel()
+            for page_url in page_urls:
+                product_urls = await self.scrape_product_urls(session=session, page_url=page_url)
+                tasks = [self.scrape_product_info(session=session, product_url=product_url) for product_url in product_urls]
+                await asyncio.gather(*tasks)
+        await self.convert_to_excel()
 
 
     def generate_page_urls(self, first_page: int, final_page: int):
         return [f'{self.url}&sayfa={page_no}' for page_no in range(first_page, final_page + 1)]
     
 
-    def scrape_product_urls(self, page_url: str):
-        self.page.goto(url=page_url)
-        page_content = self.page.content()
-        soup = BeautifulSoup(page_content, 'lxml')
+    async def fetch(self, session, url):
+        try:
+            async with session.get(url=url, headers=self.headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                await asyncio.sleep(random.uniform(0.5, 1.5))
+                return await response.text()
+        except:
+            print(traceback.format_exc())
+            return None
+        
 
+    async def scrape_product_urls(self, session, page_url: str):
+        response = await self.fetch(session=session, url=page_url)
+        if not response:
+            return []
+        
+        soup = BeautifulSoup(response, 'lxml')
         product_urls = []
         li_tags = soup.find_all('li')
         for li_tag in li_tags:
@@ -56,10 +74,12 @@ class HepsiburadaScraper:
         return product_urls
     
 
-    def scrape_product_info(self, product_url: str):
-        self.page.goto(url=product_url)
-        page_content = self.page.content()
-        soup = BeautifulSoup(page_content, 'lxml')
+    async def scrape_product_info(self, session, product_url: str):
+        response = await self.fetch(session=session, url=product_url)
+        if not response:
+            return
+        
+        soup = BeautifulSoup(response, 'lxml')
 
         product_code = product_url.split('-')[-1]
         title = soup.find('h1').get_text().strip()
@@ -82,8 +102,6 @@ class HepsiburadaScraper:
                         images.append(li_tag.find('img').get('src'))
         except:
             pass
-        main_image = images[0] if images else None
-        images.pop(0)
 
         variant_names = []
         variant_images = []
@@ -121,7 +139,6 @@ class HepsiburadaScraper:
                 'price': price,
                 'description': description,
                 'sizes': ', '.join(sizes) if sizes else None,
-                'main_image': main_image,
                 'images': ' '.join(images) if images else None,
                 'variant-names': ', '.join(variant_names) if variant_names else None,
                 'variant-images': ' '.join(variant_images) if variant_images else None
@@ -129,28 +146,20 @@ class HepsiburadaScraper:
         )
         print(title)
 
-    
-    def convert_to_excel(self):
-        if self.list_for_excel:
-            df = pd.DataFrame(self.list_for_excel)
-            df.to_excel(self.filename, index=False)
-            print(f'{self.filename} dosyasına {len(df)} ürün yazıldı.')
-        else:
-            print('Hiçbir veri toplanamadı. Dosya oluşturulmadı.')
+
+    async def convert_to_excel(self):
+        df = pd.DataFrame(self.list_for_excel)
+        df.to_excel(self.filename, index=False)
+        print(f'\nExcel dosyası oluşturuldu: {self.filename}')
+
+
 
 
 if __name__ == '__main__':
-    url = input('Link: ')
-    first_page = int(input('Başangıç sayfası: '))
-    final_page = int(input('Bitiş sayfası: '))
-    filename = input('Dosya adı: ')
-    filename = filename if filename.endswith('.xlsx') else f'{filename}.xlsx'
-
-    scraper = HepsiburadaScraper(
-        url=url,
-        first_page=first_page,
-        final_page=final_page,
-        filename=filename
+    scraper = AsyncHepsiburadaScraper(
+        url='https://www.hepsiburada.com/ara?q=ceket',
+        first_page=1,
+        final_page=3,
+        filename='deneme2.xlsx'
     )
-
-    scraper.main()
+    asyncio.run(scraper.main())
